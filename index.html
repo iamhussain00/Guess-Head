@@ -1,0 +1,1042 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GuessHead Live — Voice Party Guessing Game</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              yellow: '#FACC15',
+              pink: '#F43F5E',
+              cyan: '#06B6D4',
+              purple: '#8B5CF6',
+              dark: '#0F172A',
+              card: '#1E293B'
+            }
+          },
+          fontFamily: {
+            display: ['Cabinet Grotesk', 'Impact', 'system-ui', 'sans-serif'],
+            handwriting: ['Permanent Marker', 'Comic Sans MS', 'cursive']
+          }
+        }
+      }
+    }
+  </script>
+  <!-- Google Fonts for Sticky Note Aesthetic -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&family=Permanent+Marker&family=Plus+Jakarta+Sans:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Canvas Confetti CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+  <!-- Jitsi Meet External API SDK -->
+  <script src="https://meet.jit.si/external_api.js"></script>
+
+  <style>
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background: radial-gradient(circle at 15% 20%, #1e1b4b 0%, #0f172a 50%, #030712 100%);
+      color: #f8fafc;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+    .sticky-note {
+      font-family: 'Permanent Marker', 'Fredoka', cursive;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
+      transform: rotate(var(--rot, -1.5deg));
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .sticky-note:hover {
+      transform: rotate(0deg) scale(1.02);
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+    }
+    .glass-panel {
+      background: rgba(30, 41, 59, 0.7);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .pulse-glow {
+      box-shadow: 0 0 20px rgba(244, 63, 94, 0.5);
+      animation: pulseGlow 2s infinite;
+    }
+    @keyframes pulseGlow {
+      0%, 100% { box-shadow: 0 0 15px rgba(244, 63, 94, 0.4); }
+      50% { box-shadow: 0 0 28px rgba(244, 63, 94, 0.85); }
+    }
+    /* Hide scrollbars for slick looks */
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+</head>
+<body class="flex flex-col min-h-screen">
+
+  <header class="glass-panel sticky top-0 z-40 border-b border-slate-800">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-yellow to-brand-pink flex items-center justify-center shadow-lg transform -rotate-6">
+          <i data-lucide="help-circle" class="w-6 h-6 text-slate-950 stroke-[2.5]"></i>
+        </div>
+        <div>
+          <h1 class="font-extrabold text-xl tracking-tight text-white flex items-center gap-2">
+            GuessHead <span class="bg-gradient-to-r from-amber-400 to-rose-400 bg-clip-text text-transparent font-black">LIVE</span>
+            <span class="text-[10px] tracking-wide uppercase px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Voice Powered</span>
+          </h1>
+          <p class="text-xs text-slate-400">Hedbanz / "Who Am I?" Party Game</p>
+        </div>
+      </div>
+
+      <!-- Quick Room status badge & Call Toggle -->
+      <div class="flex items-center space-x-2 sm:space-x-3">
+        <div id="roomBadge" class="hidden px-3 py-1.5 rounded-lg bg-slate-800/80 border border-slate-700 text-xs flex items-center gap-2">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span class="text-slate-400">Room:</span>
+          <span id="currentRoomCode" class="font-bold text-amber-300 uppercase tracking-wider font-mono">----</span>
+          <button onclick="copyRoomLink()" title="Copy Invite Link" class="text-slate-400 hover:text-white transition">
+            <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+          </button>
+        </div>
+
+        <button onclick="toggleAudioDrawer()" id="audioToggleBtn" class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg shadow-indigo-600/30 transition">
+          <i data-lucide="mic" class="w-4 h-4"></i>
+          <span id="audioBtnLabel" class="hidden sm:inline">Voice Call Room</span>
+        </button>
+
+        <button onclick="openModal('howToPlayModal')" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition" title="Game Rules">
+          <i data-lucide="book-open" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <div id="perspectiveBar" class="hidden bg-slate-900 border-b border-indigo-950 px-4 py-2 text-xs">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
+      <div class="flex items-center gap-2">
+        <span class="text-indigo-400 font-semibold flex items-center gap-1">
+          <i data-lucide="eye" class="w-4 h-4"></i> Viewing As (Your POV):
+        </span>
+        <select id="perspectiveSelect" onchange="changePerspective(this.value)" class="bg-slate-800 border border-slate-700 text-white rounded px-2.5 py-1 font-medium focus:ring-1 focus:ring-indigo-400 text-xs">
+          <!-- Populated by JS -->
+        </select>
+        <span class="text-slate-400 italic hidden md:inline text-[11px]">(Rule: You can see everyone's word EXCEPT your own!)</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <button onclick="resetGameSession()" class="text-rose-400 hover:text-rose-300 font-medium px-2 py-0.5 rounded hover:bg-rose-950/40 text-xs flex items-center gap-1">
+          <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i> New Round
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <main class="flex-grow max-w-7xl w-full mx-auto p-4 sm:p-6 flex flex-col">
+
+    <!-- VIEW 1: LOBBY & SETUP VIEW -->
+    <section id="lobbyView" class="w-full max-w-3xl mx-auto my-auto py-8">
+      <div class="glass-panel p-6 sm:p-10 rounded-3xl shadow-2xl relative overflow-hidden">
+        <div class="absolute -top-24 -right-24 w-60 h-60 bg-rose-500/10 rounded-full blur-3xl pointer-events-none"></div>
+        <div class="absolute -bottom-24 -left-24 w-60 h-60 bg-amber-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+        <div class="text-center mb-8">
+          <span class="px-3 py-1 rounded-full text-xs font-semibold bg-amber-400/10 text-amber-300 border border-amber-400/20">The Voice Guessing Party</span>
+          <h2 class="text-3xl sm:text-4xl font-extrabold text-white mt-2">Who Am I on My Forehead?</h2>
+          <p class="text-slate-400 text-sm mt-2 max-w-md mx-auto">
+            Everyone sees your secret word on your card, except YOU! Take turns asking yes/no questions over voice chat to guess who you are.
+          </p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <!-- Player Profile -->
+          <div class="space-y-4">
+            <div>
+              <label class="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-2">Your Player Name</label>
+              <input type="text" id="playerNameInput" placeholder="Enter your nickname..." value="Alex" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-amber-400 transition" />
+            </div>
+
+            <div>
+              <label class="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-2">Choose Avatar</label>
+              <div class="grid grid-cols-4 gap-2" id="avatarPicker">
+                <!-- Avatars populated in JS -->
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-2">Room Code / ID</label>
+              <div class="flex gap-2">
+                <input type="text" id="roomCodeInput" placeholder="e.g. PARTY77" class="w-full uppercase font-mono tracking-widest bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-amber-400 transition" />
+                <button type="button" onclick="generateRandomRoomCode()" class="px-3 bg-slate-800 hover:bg-slate-700 rounded-xl text-slate-300 transition text-xs font-bold" title="Generate random ID">
+                  New
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Deck & Configuration -->
+          <div class="space-y-4 flex flex-col justify-between">
+            <div>
+              <label class="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-2">Theme / Word Deck</label>
+              <select id="deckSelect" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-amber-400 transition text-sm">
+                <option value="pop_culture">🔥 Trending Pop Culture & Memes</option>
+                <option value="characters">🎬 Movies, Anime & Fiction Heroes</option>
+                <option value="celebrities">🌟 Famous People & Celebrities</option>
+                <option value="animals">🦁 Animals & Wild Creatures</option>
+                <option value="objects">💡 Everyday Objects & Inventions</option>
+                <option value="custom">✏️ Custom Word List (Host Custom)</option>
+              </select>
+              <p id="deckDescription" class="text-xs text-slate-400 mt-2">
+                Universally recognizable celebrities, viral stars, and iconic media figures.
+              </p>
+            </div>
+
+            <!-- Custom deck input area (hidden by default) -->
+            <div id="customDeckContainer" class="hidden">
+              <label class="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1">Custom Words (comma-separated)</label>
+              <textarea id="customWordsInput" rows="3" placeholder="SpongeBob, Elon Musk, Golden Gate Bridge, Pizza, Pikachu..." class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-amber-400"></textarea>
+            </div>
+
+            <div class="bg-indigo-950/40 border border-indigo-800/40 rounded-xl p-3 text-xs text-indigo-300 flex items-start gap-2">
+              <i data-lucide="radio" class="w-4 h-4 text-indigo-400 mt-0.5 shrink-0"></i>
+              <span><strong>Free Integrated Audio:</strong> Automatically creates an open-source Jitsi WebRTC voice room with no login or payment required.</span>
+            </div>
+
+            <button onclick="startGame()" class="w-full py-4 rounded-xl bg-gradient-to-r from-amber-400 via-rose-500 to-purple-600 text-white font-extrabold text-base shadow-lg shadow-rose-500/25 hover:shadow-rose-500/40 hover:scale-[1.01] active:scale-[0.99] transition cursor-pointer">
+              Enter Game Room & Start
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="gameView" class="hidden flex-grow flex flex-col space-y-6">
+
+      <!-- Action & Turn Top Bar -->
+      <div class="glass-panel rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4">
+        <!-- Turn Status Indicator -->
+        <div class="flex items-center gap-3">
+          <div id="activePlayerAvatar" class="w-12 h-12 rounded-2xl bg-amber-400 text-slate-900 flex items-center justify-center font-bold text-2xl shadow-lg shadow-amber-400/20">
+            ?
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-bold uppercase text-amber-400 tracking-wider">Current Questioner</span>
+              <span id="turnQuestionCounter" class="text-[11px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded-full border border-slate-700">Question #1</span>
+            </div>
+            <div id="activePlayerName" class="text-lg font-black text-white">Player Turn</div>
+          </div>
+        </div>
+
+        <!-- 60-Second Round Countdown Timer -->
+        <div class="flex items-center gap-3">
+          <div class="text-right">
+            <span class="text-[11px] uppercase tracking-wider text-slate-400 font-semibold block">Turn Timer</span>
+            <span id="timerDisplay" class="font-mono text-2xl font-black text-white tracking-widest">00:60</span>
+          </div>
+          <button onclick="toggleTimer()" id="timerControlBtn" class="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700" title="Pause / Resume Timer">
+            <i data-lucide="pause" id="timerIcon" class="w-5 h-5"></i>
+          </button>
+          <button onclick="resetTurnTimer()" class="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700" title="Reset 60s">
+            <i data-lucide="rotate-ccw" class="w-5 h-5"></i>
+          </button>
+        </div>
+
+        <!-- Guesser Action Buttons -->
+        <div class="flex items-center gap-2">
+          <button onclick="openGuessModal()" class="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-emerald-500/25 transition">
+            <i data-lucide="sparkles" class="w-4 h-4"></i>
+            <span>"I Know My Word!"</span>
+          </button>
+
+          <button onclick="rerollMyWord()" id="rerollBtn" class="px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 font-bold text-xs flex items-center gap-1.5 transition" title="1 Free Re-roll if word is too difficult">
+            <i data-lucide="shuffle" class="w-4 h-4"></i>
+            <span>Swap Word (1 Left)</span>
+          </button>
+
+          <button onclick="nextTurn()" class="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs sm:text-sm flex items-center gap-2 transition">
+            <span>Next Turn</span>
+            <i data-lucide="arrow-right" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Quick Audio Reaction Soundboard & Voting Bar for Other Players -->
+      <div class="glass-panel rounded-xl px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div class="flex items-center gap-2 text-slate-300">
+          <i data-lucide="message-square" class="w-4 h-4 text-brand-pink"></i>
+          <span class="font-semibold">Room Voice Answers:</span>
+          <span class="text-slate-400">Vote on the questioner's question:</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="castReaction('YES! 👍', 'bg-emerald-500')" class="px-3 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/40 text-emerald-300 border border-emerald-500/30 font-bold transition flex items-center gap-1">
+            <span>YES</span>
+          </button>
+          <button onclick="castReaction('NO! 👎', 'bg-rose-500')" class="px-3 py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/40 text-rose-300 border border-rose-500/30 font-bold transition flex items-center gap-1">
+            <span>NO</span>
+          </button>
+          <button onclick="castReaction('SOMETIMES / MAYBE 🤔', 'bg-amber-500')" class="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/40 text-amber-300 border border-amber-500/30 font-bold transition flex items-center gap-1">
+            <span>MAYBE</span>
+          </button>
+          <button onclick="castReaction('GETTING WARMER! 🔥', 'bg-orange-500')" class="px-3 py-1.5 rounded-lg bg-orange-500/20 hover:bg-orange-500/40 text-orange-300 border border-orange-500/30 font-bold transition flex items-center gap-1">
+            <span>WARM</span>
+          </button>
+          <button onclick="castReaction('COLD! ❄️', 'bg-sky-500')" class="px-3 py-1.5 rounded-lg bg-sky-500/20 hover:bg-sky-500/40 text-sky-300 border border-sky-500/30 font-bold transition flex items-center gap-1">
+            <span>COLD</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Real-time Reaction Floating Banner -->
+      <div id="reactionToast" class="hidden mx-auto transition transform scale-95 py-2 px-6 rounded-full text-sm font-black shadow-2xl flex items-center gap-2 animate-bounce">
+        <!-- Injected via castReaction -->
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6" id="playersCardGrid">
+        <!-- Player cards rendered dynamically based on active player POV -->
+      </div>
+    </section>
+
+  </main>
+
+  <aside id="audioDrawer" class="glass-panel fixed bottom-0 right-0 z-50 w-full sm:w-96 max-h-[85vh] sm:max-h-[90vh] rounded-t-3xl sm:rounded-tl-3xl border-t sm:border-l border-indigo-800/50 shadow-2xl transition-transform duration-300 translate-y-full flex flex-col">
+    <!-- Drawer Header -->
+    <div class="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/90 rounded-t-3xl">
+      <div class="flex items-center gap-2">
+        <div class="w-3 h-3 rounded-full bg-emerald-400 animate-ping"></div>
+        <span class="font-bold text-sm text-white flex items-center gap-2">
+          Jitsi Voice Room <span class="text-[10px] bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded border border-indigo-500/30">Free WebRTC</span>
+        </span>
+      </div>
+      <div class="flex items-center gap-2">
+        <button onclick="toggleAudioDrawer()" class="p-1 rounded-lg text-slate-400 hover:text-white">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Instructions banner inside drawer -->
+    <div class="px-4 py-2 bg-indigo-950/40 text-[11px] text-indigo-200 border-b border-indigo-900/40 flex items-center justify-between">
+      <span>Talk freely with your friends while asking questions!</span>
+      <a id="externalMeetLink" href="#" target="_blank" class="text-amber-400 hover:underline flex items-center gap-1 font-bold">
+        Open Tab <i data-lucide="external-link" class="w-3 h-3"></i>
+      </a>
+    </div>
+
+    <!-- Jitsi Iframe Container -->
+    <div id="jitsiContainer" class="flex-grow w-full h-80 sm:h-96 bg-slate-950 relative">
+      <div id="jitsiLoading" class="absolute inset-0 flex flex-col items-center justify-center p-6 text-center text-slate-400 text-xs">
+        <div class="w-8 h-8 border-2 border-amber-400 border-t-transparent rounded-full animate-spin mb-3"></div>
+        <span>Connecting to Free Audio Conference...</span>
+        <span class="text-[10px] text-slate-500 mt-1">Allows microphone & speaker connection</span>
+      </div>
+    </div>
+
+    <!-- Footer audio controls -->
+    <div class="p-3 bg-slate-900/90 border-t border-slate-800 flex items-center justify-between text-xs">
+      <span class="text-slate-400 text-[11px]">Powered by open-source meet.jit.si</span>
+      <button onclick="reloadJitsiCall()" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center gap-1">
+        <i data-lucide="refresh-cw" class="w-3 h-3"></i> Reconnect Call
+      </button>
+    </div>
+  </aside>
+
+  <!-- Guess Modal -->
+  <div id="guessModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+    <div class="glass-panel w-full max-w-md p-6 rounded-3xl border border-amber-400/30 shadow-2xl relative">
+      <div class="w-12 h-12 rounded-2xl bg-amber-400/20 text-amber-300 flex items-center justify-center mb-4">
+        <i data-lucide="sparkles" class="w-6 h-6"></i>
+      </div>
+      <h3 class="text-xl font-black text-white">Solve Your Secret Word!</h3>
+      <p class="text-xs text-slate-400 mt-1 mb-4">
+        You are making an official guess for your forehead card. Type your guess below or ask the room if they agree!
+      </p>
+
+      <div class="space-y-4">
+        <div>
+          <label class="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1">Your Final Guess</label>
+          <input type="text" id="guessInput" placeholder="e.g. Spider-Man..." class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-emerald-400" />
+        </div>
+
+        <div id="guessResultMsg" class="hidden p-3 rounded-xl text-xs font-bold"></div>
+
+        <div class="flex items-center gap-3 pt-2">
+          <button onclick="submitGuess()" class="flex-1 py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black rounded-xl text-xs transition">
+            Check My Guess
+          </button>
+          <button onclick="confirmCorrectManual()" class="px-4 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs transition" title="If player pronounced or described it right">
+            Room Validated! (I Win)
+          </button>
+        </div>
+      </div>
+
+      <button onclick="closeModal('guessModal')" class="absolute top-5 right-5 text-slate-400 hover:text-white">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- How to Play Modal -->
+  <div id="howToPlayModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+    <div class="glass-panel w-full max-w-lg p-6 sm:p-8 rounded-3xl border border-slate-700 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center gap-3 mb-4">
+        <div class="w-10 h-10 rounded-xl bg-amber-400 text-slate-950 flex items-center justify-center font-bold">
+          <i data-lucide="book-open" class="w-5 h-5"></i>
+        </div>
+        <h3 class="text-xl font-black text-white">How to Play "GuessHead"</h3>
+      </div>
+
+      <div class="space-y-4 text-xs text-slate-300 leading-relaxed">
+        <div class="p-3 rounded-xl bg-slate-900/80 border border-slate-800">
+          <h4 class="font-bold text-amber-400 text-sm mb-1">1. The Forehead Secret (Post-it Rule)</h4>
+          <p>Every player is assigned a secret character or word. In real life, it’s stuck to your forehead. On this site, <strong>everyone else can see your word, but your own card stays hidden with a mystery badge!</strong></p>
+        </div>
+
+        <div class="p-3 rounded-xl bg-slate-900/80 border border-slate-800">
+          <h4 class="font-bold text-rose-400 text-sm mb-1">2. Voice Call Connection</h4>
+          <p>Click <strong>"Voice Call Room"</strong> at any time to open the built-in Jitsi audio room so everyone can talk without needing third-party software.</p>
+        </div>
+
+        <div class="p-3 rounded-xl bg-slate-900/80 border border-slate-800">
+          <h4 class="font-bold text-cyan-400 text-sm mb-1">3. Ask Yes-or-No Questions</h4>
+          <p>On your turn, you have 60 seconds to ask yes/no questions to the group: <em>"Am I alive?", "Am I a fictional character?", "Am I an animal?"</em></p>
+        </div>
+
+        <div class="p-3 rounded-xl bg-slate-900/80 border border-slate-800">
+          <h4 class="font-bold text-emerald-400 text-sm mb-1">4. Solve or Pass</h4>
+          <p>If you deduce your word, click <strong>"I Know My Word"</strong>. If your card feels too obscure, you have 1 free card re-roll per round!</p>
+        </div>
+      </div>
+
+      <button onclick="closeModal('howToPlayModal')" class="mt-6 w-full py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl text-xs transition">
+        Got it! Let's Play
+      </button>
+      <button onclick="closeModal('howToPlayModal')" class="absolute top-5 right-5 text-slate-400 hover:text-white">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+    </div>
+  </div>
+
+  <script>
+    /* Curated, recognizable and balanced Word Banks */
+    const WORD_BANKS = {
+      pop_culture: [
+        { word: "Spider-Man", hint: "Superhero / Marvel", category: "Pop Culture" },
+        { word: "Taylor Swift", hint: "Global Pop Star", category: "Pop Culture" },
+        { word: "Harry Potter", hint: "Boy Wizard / Hogwarts", category: "Pop Culture" },
+        { word: "Barbie", hint: "Iconic Fashion Doll / Movie", category: "Pop Culture" },
+        { word: "Shrek", hint: "Green Ogre in a Swamp", category: "Pop Culture" },
+        { word: "Darth Vader", hint: "Star Wars Sith Lord", category: "Pop Culture" },
+        { word: "Beyoncé", hint: "Music Icon & Queen", category: "Pop Culture" },
+        { word: "MrBeast", hint: "YouTube Megastar", category: "Pop Culture" },
+        { word: "Batman", hint: "Dark Knight of Gotham", category: "Pop Culture" },
+        { word: "Pikachu", hint: "Electric Pokémon Mascot", category: "Pop Culture" },
+        { word: "Mario", hint: "Nintendo Mushroom Kingdom Plumber", category: "Pop Culture" },
+        { word: "Elsa", hint: "Frozen Queen of Arendelle", category: "Pop Culture" }
+      ],
+      characters: [
+        { word: "Sherlock Holmes", hint: "Baker Street Detective", category: "Fictional Character" },
+        { word: "Goku", hint: "Saiyan Warrior from DBZ", category: "Anime Character" },
+        { word: "Yoda", hint: "Jedi Master / Star Wars", category: "Sci-Fi Character" },
+        { word: "SpongeBob SquarePants", hint: "Living in a Pineapple under the sea", category: "Cartoon" },
+        { word: "Iron Man", hint: "Billionaire Genius Tony Stark", category: "Superhero" },
+        { word: "Naruto Uzumaki", hint: "Hokage Ninja of the Leaf", category: "Anime Character" },
+        { word: "James Bond", hint: "007 Secret Agent", category: "Movie Icon" },
+        { word: "Wednesday Addams", hint: "Nevermore Academy Student", category: "TV Character" },
+        { word: "Jack Sparrow", hint: "Pirates of the Caribbean Captain", category: "Movie Icon" },
+        { word: "Woody", hint: "Cowboy Toy / Toy Story", category: "Animation" }
+      ],
+      celebrities: [
+        { word: "Elon Musk", hint: "Tesla / SpaceX Billionaire", category: "Tech & Celebrity" },
+        { word: "Cristiano Ronaldo", hint: "Legendary Football / Soccer Icon", category: "Athlete" },
+        { word: "Lionel Messi", hint: "World Cup Winner / Soccer Legend", category: "Athlete" },
+        { word: "Albert Einstein", hint: "E=mc² Theoretical Physicist", category: "Historical Celebrity" },
+        { word: "Gordon Ramsay", hint: "Hell's Kitchen Master Chef", category: "TV Celebrity" },
+        { word: "Will Smith", hint: "Fresh Prince / Hollywood Actor", category: "Actor" },
+        { word: "Zendaya", hint: "Actress / Euphoria & Dune", category: "Actress" },
+        { word: "Keanu Reeves", hint: "John Wick / The Matrix", category: "Actor" },
+        { word: "Oprah Winfrey", hint: "Talk Show Legend & Mogul", category: "Media Mogul" }
+      ],
+      animals: [
+        { word: "Penguin", hint: "Flightless Antarctic Bird in a Tuxedo", category: "Animal" },
+        { word: "Giraffe", hint: "Tallest mammal with long neck", category: "Animal" },
+        { word: "Kangaroo", hint: "Australian Jumper with a pouch", category: "Animal" },
+        { word: "Octopus", hint: "Eight-legged ocean creature", category: "Animal" },
+        { word: "Chameleon", hint: "Color-changing lizard", category: "Animal" },
+        { word: "Panda", hint: "Bamboo-eating giant bear", category: "Animal" },
+        { word: "Bald Eagle", hint: "American Bird of Prey", category: "Animal" },
+        { word: "Cheetah", hint: "Fastest land animal", category: "Animal" }
+      ],
+      objects: [
+        { word: "Microwave", hint: "Heats your food in 60 seconds", category: "Household Object" },
+        { word: "Smart Phone", hint: "Device you stare at all day", category: "Everyday Tech" },
+        { word: "Toaster", hint: "Pops out warm bread", category: "Kitchen Appliance" },
+        { word: "Toothbrush", hint: "Keeps your teeth clean daily", category: "Bathroom Item" },
+        { word: "Helicopter", hint: "Flying vehicle with spinning blades", category: "Vehicle" },
+        { word: "Umbrella", hint: "Protects you from the rain", category: "Everyday Item" },
+        { word: "Headphones", hint: "Wear on ears for music", category: "Gadget" }
+      ]
+    };
+
+    const AVATARS = ['🦁', '🦊', '🐼', '🤖', '🦄', '🐱', '🐸', '🚀'];
+
+    /* Active Game State */
+    let gameState = {
+      roomCode: 'PARTY77',
+      myPlayerId: 'p1', // POV identifier
+      currentTurnIndex: 0,
+      activeDeckKey: 'pop_culture',
+      turnTimerSeconds: 60,
+      timerRunning: false,
+      timerInterval: null,
+      questionCount: 1,
+      players: [
+        { id: 'p1', name: 'Alex (You)', avatar: '🦁', word: 'Spider-Man', hint: 'Superhero', category: 'Pop Culture', score: 0, rerollsLeft: 1, guessed: false },
+        { id: 'p2', name: 'Sam', avatar: '🦊', word: 'Taylor Swift', hint: 'Pop Star', category: 'Pop Culture', score: 0, rerollsLeft: 1, guessed: false },
+        { id: 'p3', name: 'Maya', avatar: '🐼', word: 'Shrek', hint: 'Green Ogre', category: 'Pop Culture', score: 0, rerollsLeft: 1, guessed: false },
+        { id: 'p4', name: 'Leo', avatar: '🤖', word: 'Barbie', hint: 'Doll / Movie', category: 'Pop Culture', score: 0, rerollsLeft: 1, guessed: false }
+      ]
+    };
+
+    let jitsiApi = null;
+    let selectedAvatar = '🦁';
+
+    window.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+      initAvatarPicker();
+      generateRandomRoomCode();
+
+      // Deck change description updater
+      const deckSelect = document.getElementById('deckSelect');
+      deckSelect.addEventListener('change', (e) => {
+        const val = e.target.value;
+        const customContainer = document.getElementById('customDeckContainer');
+        const desc = document.getElementById('deckDescription');
+
+        if (val === 'custom') {
+          customContainer.classList.remove('hidden');
+          desc.textContent = 'Write your own secret words or paste custom lists for your friends.';
+        } else {
+          customContainer.classList.add('hidden');
+          const sample = WORD_BANKS[val] ? WORD_BANKS[val].slice(0, 3).map(w => w.word).join(', ') : '';
+          desc.textContent = `Includes popular words like: ${sample}, and more!`;
+        }
+      });
+    });
+
+    function initAvatarPicker() {
+      const picker = document.getElementById('avatarPicker');
+      picker.innerHTML = AVATARS.map((av, idx) => `
+        <button type="button" onclick="selectAvatar('${av}', this)" class="avatar-opt h-11 rounded-xl text-xl flex items-center justify-center transition border ${idx === 0 ? 'border-amber-400 bg-amber-400/20' : 'border-slate-800 bg-slate-900/60 hover:bg-slate-800'}">
+          ${av}
+        </button>
+      `).join('');
+    }
+
+    function selectAvatar(av, el) {
+      selectedAvatar = av;
+      document.querySelectorAll('.avatar-opt').forEach(b => {
+        b.className = 'avatar-opt h-11 rounded-xl text-xl flex items-center justify-center transition border border-slate-800 bg-slate-900/60 hover:bg-slate-800';
+      });
+      el.className = 'avatar-opt h-11 rounded-xl text-xl flex items-center justify-center transition border border-amber-400 bg-amber-400/20';
+    }
+
+    function generateRandomRoomCode() {
+      const code = 'GUESS' + Math.floor(1000 + Math.random() * 9000);
+      document.getElementById('roomCodeInput').value = code;
+    }
+
+    function startGame() {
+      const name = document.getElementById('playerNameInput').value.trim() || 'Alex';
+      const room = document.getElementById('roomCodeInput').value.trim().toUpperCase() || 'GUESS888';
+      const deckKey = document.getElementById('deckSelect').value;
+
+      gameState.roomCode = room;
+      gameState.activeDeckKey = deckKey;
+
+      // Update primary user profile
+      gameState.players[0].name = `${name} (You)`;
+      gameState.players[0].avatar = selectedAvatar;
+
+      // Distribute words to all players
+      assignWordsToPlayers(deckKey);
+
+      // Transition views
+      document.getElementById('lobbyView').classList.add('hidden');
+      document.getElementById('gameView').classList.remove('hidden');
+      document.getElementById('perspectiveBar').classList.remove('hidden');
+      document.getElementById('roomBadge').classList.remove('hidden');
+      document.getElementById('currentRoomCode').textContent = room;
+
+      // Populate Perspective Selector for easy local testing
+      populatePerspectiveDropdown();
+
+      // Render players table and setup turn
+      renderPlayerCards();
+      updateTurnDisplay();
+      startTurnTimer();
+
+      // Prepare Jitsi room parameters
+      setupJitsiConference(room, name);
+      lucide.createIcons();
+    }
+
+    function assignWordsToPlayers(deckKey) {
+      let pool = [];
+      if (deckKey === 'custom') {
+        const customText = document.getElementById('customWordsInput').value;
+        const words = customText.split(',').map(s => s.trim()).filter(s => s.length > 0);
+        if (words.length >= 4) {
+          pool = words.map(w => ({ word: w, hint: "Custom Word", category: "Custom" }));
+        } else {
+          pool = WORD_BANKS.pop_culture;
+        }
+      } else {
+        pool = [...(WORD_BANKS[deckKey] || WORD_BANKS.pop_culture)];
+      }
+
+      // Shuffle pool
+      pool = pool.sort(() => 0.5 - Math.random());
+
+      gameState.players.forEach((player, idx) => {
+        const item = pool[idx % pool.length];
+        player.word = item.word;
+        player.hint = item.hint;
+        player.category = item.category;
+        player.guessed = false;
+        player.rerollsLeft = 1;
+      });
+    }
+
+    function setupJitsiConference(roomName, displayName) {
+      const domain = 'meet.jit.si';
+      const cleanRoom = 'GuessHead_' + roomName.replace(/[^a-zA-Z0-9]/g, '');
+      const externalLink = `https://${domain}/${cleanRoom}#config.prejoinPageEnabled=false&config.startWithAudioMuted=false`;
+      
+      const linkEl = document.getElementById('externalMeetLink');
+      if (linkEl) linkEl.href = externalLink;
+
+      const container = document.getElementById('jitsiContainer');
+      const loader = document.getElementById('jitsiLoading');
+
+      try {
+        if (typeof JitsiMeetExternalAPI !== 'undefined') {
+          // Clear any existing instance
+          container.innerHTML = '';
+          const options = {
+            roomName: cleanRoom,
+            width: '100%',
+            height: '100%',
+            parentNode: container,
+            userInfo: {
+              displayName: displayName
+            },
+            configOverwrite: {
+              startWithAudioMuted: false,
+              startWithVideoMuted: true, // Audio focused party game
+              prejoinPageEnabled: false,
+              disableDeepLinking: true
+            },
+            interfaceConfigOverwrite: {
+              TOOLBAR_BUTTONS: [
+                'microphone', 'camera', 'hangup', 'chat', 'settings'
+              ],
+              SHOW_JITSI_WATERMARK: false
+            }
+          };
+          jitsiApi = new JitsiMeetExternalAPI(domain, options);
+          if (loader) loader.style.display = 'none';
+        } else {
+          // Fallback if external script is blocked by browser policies
+          container.innerHTML = `
+            <iframe src="${externalLink}" allow="camera; microphone; display-capture; autoplay" class="w-full h-full border-0"></iframe>
+          `;
+        }
+      } catch (err) {
+        console.warn("Jitsi inline init notice:", err);
+        container.innerHTML = `
+          <div class="p-6 text-center text-xs text-slate-300">
+            <p class="font-bold text-amber-400 mb-2">Voice Call Ready in Separate Tab</p>
+            <p class="mb-4">Click below to open your free Jitsi audio conference:</p>
+            <a href="${externalLink}" target="_blank" class="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 rounded-xl text-white font-bold">
+              Join Voice Room (${roomName})
+            </a>
+          </div>
+        `;
+      }
+    }
+
+    function toggleAudioDrawer() {
+      const drawer = document.getElementById('audioDrawer');
+      const isOpen = !drawer.classList.contains('translate-y-full');
+      if (isOpen) {
+        drawer.classList.add('translate-y-full');
+      } else {
+        drawer.classList.remove('translate-y-full');
+      }
+    }
+
+    function reloadJitsiCall() {
+      const name = gameState.players.find(p => p.id === gameState.myPlayerId)?.name || 'Player';
+      setupJitsiConference(gameState.roomCode, name);
+    }
+
+    function renderPlayerCards() {
+      const grid = document.getElementById('playersCardGrid');
+      grid.innerHTML = '';
+
+      const activePlayer = gameState.players[gameState.currentTurnIndex];
+
+      gameState.players.forEach((player, idx) => {
+        const isCurrentTurn = (player.id === activePlayer.id);
+        const isMe = (player.id === gameState.myPlayerId);
+        
+        // Sticky note colors for aesthetic party feel
+        const stickyColors = [
+          'bg-gradient-to-br from-amber-200 to-amber-300 text-slate-900 border-amber-400',
+          'bg-gradient-to-br from-rose-200 to-rose-300 text-slate-900 border-rose-400',
+          'bg-gradient-to-br from-cyan-200 to-cyan-300 text-slate-900 border-cyan-400',
+          'bg-gradient-to-br from-emerald-200 to-emerald-300 text-slate-900 border-emerald-400'
+        ];
+        const noteTheme = stickyColors[idx % stickyColors.length];
+        const rotDegree = (idx % 2 === 0 ? -1.5 : 1.8);
+
+        // Core Game Rule:
+        // If it is ME: THE WORD IS OBSCURED! (Hidden from the guesser)
+        // If it is another player: I CAN SEE THEIR WORD CLEARLY!
+        let foreheadContent = '';
+
+        if (player.guessed) {
+          foreheadContent = `
+            <div class="text-center py-3">
+              <span class="inline-block px-3 py-1 rounded-full bg-emerald-700 text-white text-xs font-bold uppercase tracking-wider mb-2">Solved! 🎉</span>
+              <div class="text-xl font-black text-emerald-950">${player.word}</div>
+            </div>
+          `;
+        } else if (isMe) {
+          // MASKED FROM CURRENT USER (Secret!)
+          foreheadContent = `
+            <div class="flex flex-col items-center justify-center py-2 text-center">
+              <div class="w-8 h-8 rounded-full bg-slate-950/20 flex items-center justify-center mb-1 text-slate-800">
+                <i data-lucide="eye-off" class="w-5 h-5"></i>
+              </div>
+              <span class="text-xs uppercase font-extrabold tracking-widest text-slate-800">HIDDEN FROM YOU!</span>
+              <span class="text-[10px] text-slate-700 mt-1 font-semibold">Everyone else sees your word:</span>
+              <span class="inline-block mt-1 px-2.5 py-0.5 rounded-full bg-slate-950/20 text-slate-900 text-[11px] font-bold">Hint: [${player.category}]</span>
+            </div>
+          `;
+        } else {
+          // VISIBLE TO ALL OTHER PLAYERS
+          foreheadContent = `
+            <div class="flex flex-col items-center justify-center py-2 text-center">
+              <span class="text-[10px] uppercase font-extrabold tracking-wider text-slate-700">Forehead Word:</span>
+              <div class="text-xl sm:text-2xl font-black text-slate-950 tracking-tight my-1 uppercase">
+                ${player.word}
+              </div>
+              <span class="text-[10px] text-slate-800 font-bold bg-slate-900/10 px-2 py-0.5 rounded-full">
+                Hint: ${player.hint}
+              </span>
+            </div>
+          `;
+        }
+
+        const cardEl = document.createElement('div');
+        cardEl.className = `glass-panel rounded-3xl p-5 relative transition flex flex-col justify-between border-2 ${
+          isCurrentTurn ? 'border-amber-400 pulse-glow bg-slate-800/90' : 'border-slate-800 hover:border-slate-700'
+        }`;
+
+        cardEl.innerHTML = `
+          <!-- Header info -->
+          <div>
+            <div class="flex items-center justify-between mb-4">
+              <div class="flex items-center gap-2.5">
+                <span class="text-2xl">${player.avatar}</span>
+                <div>
+                  <h4 class="font-extrabold text-sm text-white flex items-center gap-1.5">
+                    ${player.name}
+                    ${isMe ? '<span class="text-[10px] bg-amber-400 text-slate-950 font-black px-1.5 py-0.2 rounded">YOU</span>' : ''}
+                  </h4>
+                  <span class="text-[11px] text-slate-400">${player.score} pts • ${player.rerollsLeft} swap</span>
+                </div>
+              </div>
+              ${isCurrentTurn ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-amber-400 text-slate-950">Asking</span>' : ''}
+            </div>
+
+            <!-- Sticky Note on Forehead -->
+            <div class="sticky-note ${noteTheme} p-4 rounded-xl border relative mb-4" style="--rot: ${rotDegree}deg;">
+              <div class="w-3 h-3 rounded-full bg-slate-950/30 mx-auto -mt-2 mb-2 shadow-inner"></div>
+              ${foreheadContent}
+            </div>
+          </div>
+
+          <!-- Bottom Card Controls -->
+          <div class="pt-2 border-t border-slate-800/80 flex items-center justify-between text-xs">
+            <span class="text-[11px] text-slate-400">${player.category}</span>
+            ${!player.guessed && !isMe ? `
+              <button onclick="awardScore('${player.id}')" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-emerald-950 text-slate-300 hover:text-emerald-300 border border-slate-700 hover:border-emerald-600 transition text-[11px] font-bold">
+                Mark Correct
+              </button>
+            ` : ''}
+          </div>
+        `;
+
+        grid.appendChild(cardEl);
+      });
+
+      lucide.createIcons();
+    }
+
+    function populatePerspectiveDropdown() {
+      const select = document.getElementById('perspectiveSelect');
+      select.innerHTML = gameState.players.map(p => `
+        <option value="${p.id}" ${p.id === gameState.myPlayerId ? 'selected' : ''}>
+          ${p.avatar} ${p.name}
+        </option>
+      `).join('');
+    }
+
+    function changePerspective(newPlayerId) {
+      gameState.myPlayerId = newPlayerId;
+      renderPlayerCards();
+      
+      // Update re-roll button status for current perspective
+      const me = gameState.players.find(p => p.id === newPlayerId);
+      const rerollBtn = document.getElementById('rerollBtn');
+      if (me && me.rerollsLeft <= 0) {
+        rerollBtn.disabled = true;
+        rerollBtn.className = 'px-3 py-2.5 rounded-xl bg-slate-900 text-slate-500 border border-slate-800 font-bold text-xs flex items-center gap-1.5 cursor-not-allowed';
+        rerollBtn.innerHTML = `<i data-lucide="check" class="w-4 h-4"></i> Swapped`;
+      } else {
+        rerollBtn.disabled = false;
+        rerollBtn.className = 'px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 font-bold text-xs flex items-center gap-1.5 transition';
+        rerollBtn.innerHTML = `<i data-lucide="shuffle" class="w-4 h-4"></i> Swap Word (1 Left)`;
+      }
+      lucide.createIcons();
+    }
+
+    function updateTurnDisplay() {
+      const active = gameState.players[gameState.currentTurnIndex];
+      document.getElementById('activePlayerName').textContent = active.name;
+      document.getElementById('activePlayerAvatar').textContent = active.avatar;
+      document.getElementById('turnQuestionCounter').textContent = `Question #${gameState.questionCount}`;
+    }
+
+    function nextTurn() {
+      gameState.currentTurnIndex = (gameState.currentTurnIndex + 1) % gameState.players.length;
+      gameState.questionCount = 1;
+      resetTurnTimer();
+      updateTurnDisplay();
+      renderPlayerCards();
+    }
+
+    function startTurnTimer() {
+      if (gameState.timerInterval) clearInterval(gameState.timerInterval);
+      gameState.timerRunning = true;
+      updateTimerIcon();
+
+      gameState.timerInterval = setInterval(() => {
+        if (!gameState.timerRunning) return;
+        if (gameState.turnTimerSeconds > 0) {
+          gameState.turnTimerSeconds--;
+          renderTimerDisplay();
+        } else {
+          // Timer ding sound feedback
+          playTone(400, 300);
+          toggleTimer();
+        }
+      }, 1000);
+    }
+
+    function toggleTimer() {
+      gameState.timerRunning = !gameState.timerRunning;
+      updateTimerIcon();
+    }
+
+    function updateTimerIcon() {
+      const icon = document.getElementById('timerIcon');
+      if (icon) {
+        icon.setAttribute('data-lucide', gameState.timerRunning ? 'pause' : 'play');
+        lucide.createIcons();
+      }
+    }
+
+    function resetTurnTimer() {
+      gameState.turnTimerSeconds = 60;
+      renderTimerDisplay();
+      if (!gameState.timerRunning) {
+        gameState.timerRunning = true;
+        updateTimerIcon();
+      }
+    }
+
+    function renderTimerDisplay() {
+      const sec = gameState.turnTimerSeconds;
+      const formatted = `00:${sec < 10 ? '0' : ''}${sec}`;
+      const disp = document.getElementById('timerDisplay');
+      if (disp) {
+        disp.textContent = formatted;
+        if (sec <= 10) {
+          disp.className = 'font-mono text-2xl font-black text-rose-500 tracking-widest animate-pulse';
+        } else {
+          disp.className = 'font-mono text-2xl font-black text-white tracking-widest';
+        }
+      }
+    }
+
+    function castReaction(text, colorClass) {
+      const toast = document.getElementById('reactionToast');
+      toast.className = `mx-auto transition transform py-2 px-6 rounded-full text-xs sm:text-sm font-black shadow-2xl flex items-center gap-2 text-white ${colorClass}`;
+      toast.innerHTML = `<span>Voice Answer:</span> <strong>${text}</strong>`;
+      toast.classList.remove('hidden');
+
+      // Simple pleasant audio click tone
+      playTone(600, 100);
+
+      setTimeout(() => {
+        toast.classList.add('hidden');
+      }, 2500);
+
+      gameState.questionCount++;
+      document.getElementById('turnQuestionCounter').textContent = `Question #${gameState.questionCount}`;
+    }
+
+    function rerollMyWord() {
+      const me = gameState.players.find(p => p.id === gameState.myPlayerId);
+      if (!me || me.rerollsLeft <= 0) return;
+
+      const deck = WORD_BANKS[gameState.activeDeckKey] || WORD_BANKS.pop_culture;
+      const randomNew = deck[Math.floor(Math.random() * deck.length)];
+
+      me.word = randomNew.word;
+      me.hint = randomNew.hint;
+      me.category = randomNew.category;
+      me.rerollsLeft--;
+
+      changePerspective(gameState.myPlayerId);
+      renderPlayerCards();
+
+      // Notification
+      castReaction('Card Swapped! 🔄', 'bg-amber-600');
+    }
+
+    function openGuessModal() {
+      document.getElementById('guessInput').value = '';
+      const msg = document.getElementById('guessResultMsg');
+      msg.classList.add('hidden');
+      openModal('guessModal');
+    }
+
+    function submitGuess() {
+      const input = document.getElementById('guessInput').value.trim().toLowerCase();
+      const me = gameState.players.find(p => p.id === gameState.myPlayerId);
+      const msg = document.getElementById('guessResultMsg');
+
+      if (!input || !me) return;
+
+      const actual = me.word.toLowerCase();
+      const isMatch = actual.includes(input) || input.includes(actual);
+
+      if (isMatch) {
+        msg.className = 'p-3 rounded-xl text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 block';
+        msg.innerHTML = `🎉 BINGO! Your word was indeed <strong>${me.word}</strong>!`;
+        me.guessed = true;
+        me.score += 10;
+        triggerCelebration();
+        setTimeout(() => {
+          closeModal('guessModal');
+          renderPlayerCards();
+          nextTurn();
+        }, 2000);
+      } else {
+        msg.className = 'p-3 rounded-xl text-xs font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40 block';
+        msg.innerHTML = `❌ Not quite! That was not your word. Keep asking questions!`;
+        playTone(250, 200);
+      }
+    }
+
+    function confirmCorrectManual() {
+      const me = gameState.players.find(p => p.id === gameState.myPlayerId);
+      if (me) {
+        me.guessed = true;
+        me.score += 10;
+        triggerCelebration();
+        closeModal('guessModal');
+        renderPlayerCards();
+        nextTurn();
+      }
+    }
+
+    function awardScore(playerId) {
+      const player = gameState.players.find(p => p.id === playerId);
+      if (player) {
+        player.guessed = true;
+        player.score += 10;
+        triggerCelebration();
+        renderPlayerCards();
+      }
+    }
+
+    function triggerCelebration() {
+      if (typeof confetti === 'function') {
+        confetti({
+          particleCount: 80,
+          spread: 70,
+          origin: { y: 0.6 }
+        });
+      }
+      playVictoryChime();
+    }
+
+    /* Web Audio API synthesizer for native sound effects */
+    function playTone(freq, duration) {
+      try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration / 1000);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration / 1000);
+      } catch (e) {}
+    }
+
+    function playVictoryChime() {
+      [523.25, 659.25, 783.99, 1046.50].forEach((freq, i) => {
+        setTimeout(() => playTone(freq, 250), i * 120);
+      });
+    }
+
+    function resetGameSession() {
+      assignWordsToPlayers(gameState.activeDeckKey);
+      gameState.currentTurnIndex = 0;
+      gameState.questionCount = 1;
+      resetTurnTimer();
+      renderPlayerCards();
+      updateTurnDisplay();
+    }
+
+    function copyRoomLink() {
+      const url = window.location.origin + window.location.pathname + '?room=' + gameState.roomCode;
+      navigator.clipboard.writeText(url).then(() => {
+        castReaction('Invite Link Copied! 📋', 'bg-indigo-600');
+      }).catch(() => {
+        castReaction(`Room Code: ${gameState.roomCode}`, 'bg-indigo-600');
+      });
+    }
+
+    function openModal(id) {
+      document.getElementById(id).classList.remove('hidden');
+    }
+    function closeModal(id) {
+      document.getElementById(id).classList.add('hidden');
+    }
+  </script>
+</body>
+</html>
